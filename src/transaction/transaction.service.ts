@@ -1,9 +1,9 @@
 import { MailerService } from '@nestjs-modules/mailer';
 import { HttpService } from '@nestjs/axios';
+import * as Bitcoin from 'bitcore-lib';
 import { HttpException, HttpStatus, Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { TypeOrmCrudService } from '@nestjsx/crud-typeorm';
-import * as BlockIo from 'block_io';
 import { CurrencyType } from '../currency/currency.enum';
 import { Payment } from '../payment/entities/payment.entity';
 import { PaymentService } from '../payment/payment.service';
@@ -110,6 +110,15 @@ export class TransactionService extends TypeOrmCrudService<Transaction> {
     return sendTransaction;
   }
 
+  async findTransactionByPaymentId(paymentId: number) {
+    const findTransaction = await this.repo.findOne({
+      where: {
+        paymentId: paymentId,
+      },
+    });
+    return findTransaction;
+  }
+
   async createNewWithWallet(dto: GenerateTransactionWithWalletRequestDto) {
     const paymentInDB = await this.paymentService.findPayment(dto.paymentId);
 
@@ -126,34 +135,41 @@ export class TransactionService extends TypeOrmCrudService<Transaction> {
       throw new HttpException('Currency not found', HttpStatus.BAD_REQUEST);
     }
 
-    let block_io;
-
-    if (paymentInDB.currency === CurrencyType.Doge) {
-      block_io = new BlockIo('78d9-8f79-105e-5e78');
-    }
+    let bitcore;
 
     if (paymentInDB.currency === CurrencyType.Bitcoin) {
-      block_io = new BlockIo('b5b1-5b2d-4889-efb4');
+      bitcore = Bitcoin;
+      bitcore.Networks['defaultNetwork'] = bitcore.Networks['testnet'];
+
+      const newWallet = bitcore.PrivateKey();
+
+      const address = {
+        publicKey: newWallet.toAddress().toString(),
+        privateKey: newWallet.toString(),
+      };
+
+      // if (newWallet?.status !== 'success') {
+      //   return;
+      // }
+
+      // const newWalletData = newWallet.data.address;
+
+      const newTransaction = this.repo.create({
+        payment: paymentInDB,
+        walletForTransaction: address,
+        amount: paymentInDB.amount,
+        status: 'processing',
+        updated: new Date(),
+      });
+
+      const newTransactionInDB = await this.repo.save(newTransaction);
+
+      const returnTransaction = {
+        ...newTransactionInDB,
+        walletForTransaction: newTransactionInDB.walletForTransaction.publicKey,
+      };
+
+      return returnTransaction;
     }
-
-    const newWallet = await block_io?.get_new_address();
-
-    if (newWallet.status !== 'success') {
-      return;
-    }
-
-    const newWalletData = newWallet.data.address;
-
-    const newTransaction = this.repo.create({
-      payment: paymentInDB,
-      walletForTransaction: newWalletData,
-      amount: paymentInDB.amount,
-      status: 'wallet_created',
-      updated: new Date(),
-    });
-
-    const newTransactionInDB = await this.repo.save(newTransaction);
-
-    return newTransactionInDB;
   }
 }

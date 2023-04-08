@@ -3,7 +3,7 @@ import {
   BaseEntity,
   Column,
   CreateDateColumn,
-  Entity,
+  Entity, Generated,
   ManyToOne,
   OneToMany,
   PrimaryGeneratedColumn,
@@ -97,6 +97,7 @@ export class Payment extends BaseEntity {
   })
   currency: CurrencyType;
 
-  @Column({ default: 'dasdasd' })
+  @Column()
+  @Generated('uuid')
   url: string;
 }

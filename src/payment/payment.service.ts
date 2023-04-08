@@ -122,7 +122,6 @@ export class PaymentService extends TypeOrmCrudService<Payment> {
   }
 
   async findByUrl(url: string) {
-    console.log('url', url);
     const payment = await this.repo.findOne({
       where: {
         url,
