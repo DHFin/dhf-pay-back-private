@@ -68,13 +68,22 @@ export class PaymentService extends TypeOrmCrudService<Payment> {
     });
 
     const newPaymentInDB = await this.repo.save(newPayment);
-    return Ok({ id: newPaymentInDB.id });
+    return Ok(newPaymentInDB);
   }
 
   async findPayment(id) {
     return await this.repo.findOne({
       where: {
         id: id,
+      },
+      relations: ['store', 'store.user'],
+    });
+  }
+
+  async findPaymentUrl(url) {
+    return await this.repo.findOne({
+      where: {
+        url,
       },
       relations: ['store', 'store.user'],
     });
@@ -99,6 +108,39 @@ export class PaymentService extends TypeOrmCrudService<Payment> {
       comment: payment.comment,
       type: payment.type,
       text: payment.text,
+      url: payment.url,
+      cancelled: payment.cancelled,
+      currency: payment.currency,
+      store: {
+        id: payment.store.id,
+        wallets: payment.store.wallets.map((wallet) => ({
+          value: wallet.value,
+          currency: wallet.currency,
+        })),
+      },
+    };
+  }
+
+  async findByUrl(url: string) {
+    const payment = await this.repo.findOne({
+      where: {
+        url,
+      },
+      relations: ['store', 'store.wallets'],
+    });
+    if (!payment) {
+      throw new HttpException('payment nof found', HttpStatus.NOT_FOUND);
+    }
+
+    return {
+      id: payment.id,
+      datetime: payment.datetime,
+      amount: payment.amount,
+      status: payment.status,
+      comment: payment.comment,
+      type: payment.type,
+      text: payment.text,
+      url: payment.url,
       cancelled: payment.cancelled,
       currency: payment.currency,
       store: {

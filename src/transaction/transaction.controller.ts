@@ -35,12 +35,16 @@ import {
   ReturnTransactionDto,
 } from './dto/returnTransaction.dto';
 import { ReturnNewTransactionDto } from './dto/returnNewTransaction.dto';
+import { Repository } from 'typeorm';
+import { InjectRepository } from '@nestjs/typeorm';
 
 @ApiTags('transaction')
 @Controller('transaction')
 @ApiBearerAuth('Bearer')
 export class TransactionController implements CrudController<Transaction> {
   constructor(
+    @InjectRepository(Transaction)
+    public readonly repo: Repository<Transaction>,
     public readonly service: TransactionService,
     public readonly userService: UserService,
     public readonly storeService: StoresService,
@@ -85,10 +89,10 @@ export class TransactionController implements CrudController<Transaction> {
     );
 
     if (user?.role === 'admin') {
-      return await this.service.find();
+      return await this.repo.find();
     }
     try {
-      const transactions = await this.service.find({});
+      const transactions = await this.repo.find({});
       return transactions.filter((transaction) => {
         if (
           transaction.payment?.store?.apiKey ===
@@ -221,7 +225,7 @@ export class TransactionController implements CrudController<Transaction> {
     }
 
     try {
-      const transaction = await this.service.findOne({
+      const transaction = await this.repo.findOne({
         where: {
           txHash: param.txHash,
         },
@@ -248,11 +252,38 @@ export class TransactionController implements CrudController<Transaction> {
         //throw new HttpException('No access to this transaction', HttpStatus.CONFLICT);
       }
 
-      delete transaction.payment;
+      // delete transaction.payment;
       return transaction;
     } catch (err) {
       throw new HttpException(
         'This store does not have such a transaction',
+        HttpStatus.BAD_REQUEST,
+      );
+    }
+  }
+
+  @Override()
+  @Get('btc/:id')
+  async getBtcTransaction(
+    @Param() param: { id: string },
+    @Headers() headers,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    const id = +param.id;
+    try {
+      const findTransactions = await this.repo
+        .createQueryBuilder('transaction')
+        .leftJoinAndSelect('transaction.payment', 'payments')
+        .where('payments.id = :id', { id })
+        .getOne();
+      if (!findTransactions) {
+        res.status(HttpStatus.BAD_REQUEST).send('Transaction not exist');
+        return;
+      }
+      return { ...findTransactions, walletForTransaction: findTransactions.walletForTransaction.publicKey };
+    } catch (e) {
+      throw new HttpException(
+        'Error',
         HttpStatus.BAD_REQUEST,
       );
     }
@@ -310,6 +341,7 @@ export class TransactionController implements CrudController<Transaction> {
     }
   }
 
+  @Override()
   @Post('generateWallet')
   @ApiResponse({
     status: HttpStatus.BAD_REQUEST,

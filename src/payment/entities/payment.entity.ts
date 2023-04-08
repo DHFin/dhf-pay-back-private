@@ -3,7 +3,7 @@ import {
   BaseEntity,
   Column,
   CreateDateColumn,
-  Entity,
+  Entity, Generated,
   ManyToOne,
   OneToMany,
   PrimaryGeneratedColumn,
@@ -11,6 +11,7 @@ import {
 import { CurrencyType } from '../../currency/currency.enum';
 import { Stores } from '../../stores/entities/stores.entity';
 import { Transaction } from '../../transaction/entities/transaction.entity';
+import { v4 as uuidv4 } from 'uuid';
 
 export enum Status {
   Not_paid = 'Not_paid',
@@ -95,4 +96,8 @@ export class Payment extends BaseEntity {
     default: CurrencyType.Casper,
   })
   currency: CurrencyType;
+
+  @Column()
+  @Generated('uuid')
+  url: string;
 }
