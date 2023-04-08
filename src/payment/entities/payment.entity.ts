@@ -44,7 +44,7 @@ export class Payment extends BaseEntity {
   @OneToMany(() => Transaction, (transactions) => transactions.payment)
   transactions: Transaction[];
 
-  @CreateDateColumn()
+  @CreateDateColumn({ nullable: true })
   datetime: Date;
 
   @Column({ type: 'bigint' })
