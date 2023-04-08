@@ -64,6 +64,7 @@ export class PaymentService extends TypeOrmCrudService<Payment> {
       comment: dto.comment || '',
       text: dto.text || '',
       currency: dto.currency,
+      datetime: new Date(),
       type: dto.type || null,
     });
 
