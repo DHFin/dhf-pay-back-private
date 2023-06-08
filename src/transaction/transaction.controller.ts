@@ -37,6 +37,7 @@ import {
 import { ReturnNewTransactionDto } from './dto/returnNewTransaction.dto';
 import { Repository } from 'typeorm';
 import { InjectRepository } from '@nestjs/typeorm';
+import mempoolJS from '@mempool/mempool.js';
 
 @ApiTags('transaction')
 @Controller('transaction')
@@ -261,6 +262,19 @@ export class TransactionController implements CrudController<Transaction> {
       );
     }
   }
+  
+  @Override()
+  @Get('btc/commission')
+  async getBtcCommission() {
+    try {
+      return await this.service.getBtcCommissionFromMempool();
+    } catch (e) {
+      throw new HttpException(
+        'Server Error',
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    }
+  }
 
   @Override()
   @Get('btc/:id')
@@ -280,7 +294,10 @@ export class TransactionController implements CrudController<Transaction> {
         res.status(HttpStatus.BAD_REQUEST).send('Transaction not exist');
         return;
       }
-      return { ...findTransactions, walletForTransaction: findTransactions.walletForTransaction.publicKey };
+      return {
+        ...findTransactions,
+        walletForTransaction: findTransactions.walletForTransaction.publicKey,
+      };
     } catch (e) {
       throw new HttpException(
         'Error',

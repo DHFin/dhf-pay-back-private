@@ -77,7 +77,7 @@ export class PaymentService extends TypeOrmCrudService<Payment> {
       where: {
         id: id,
       },
-      relations: ['store', 'store.user'],
+      relations: ['store', 'store.user', 'store.wallets'],
     });
   }
 

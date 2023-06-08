@@ -1,6 +1,7 @@
 import { MailerService } from '@nestjs-modules/mailer';
 import { HttpService } from '@nestjs/axios';
 import * as Bitcoin from 'bitcore-lib';
+import mempoolJS from '@mempool/mempool.js';
 import { HttpException, HttpStatus, Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { TypeOrmCrudService } from '@nestjsx/crud-typeorm';
@@ -119,6 +120,21 @@ export class TransactionService extends TypeOrmCrudService<Transaction> {
     return findTransaction;
   }
 
+  async getBtcCommissionFromMempool() {
+    const {
+      bitcoin: { fees },
+    } = mempoolJS({
+      hostname: 'mempool.space',
+    });
+
+    const feesRecommended = (await fees.getFeesRecommended()) as any;
+    return {
+      economyFee: feesRecommended.economyFee * 204,
+      avarageFee: feesRecommended.hourFee * 204,
+      fastestFee: feesRecommended.fastestFee * 204,
+    };
+  }
+
   async createNewWithWallet(dto: GenerateTransactionWithWalletRequestDto) {
     const paymentInDB = await this.paymentService.findPayment(dto.paymentId);
 
@@ -139,24 +155,62 @@ export class TransactionService extends TypeOrmCrudService<Transaction> {
 
     if (paymentInDB.currency === CurrencyType.Bitcoin) {
       bitcore = Bitcoin;
-      bitcore.Networks['defaultNetwork'] = bitcore.Networks['testnet'];
+
+      const {
+        bitcoin: { addresses, fees },
+      } = mempoolJS({
+        hostname: 'mempool.space',
+      });
+
+      const transaction = bitcore.Transaction();
 
       const newWallet = bitcore.PrivateKey();
 
+      const publicKey = newWallet.toAddress().toString();
+
+      const addressTxs = await addresses.getAddressTxs({
+        address: publicKey,
+      } as any);
+
+      const feesRecommended = (await fees.getFeesRecommended()) as any;
+
+      const addressObj = bitcore.Address(publicKey);
+
+      const scriptPubKey =
+        bitcore.Script.buildPublicKeyHashOut(addressObj).toHex();
+
+      transaction.from([
+        {
+          txid: '0000000000000000000000000000000000000000000000000000000000000000',
+          address: '1BvBMSEYstWetqTFn5Au4m4GFg7xJaNVN2',
+          satoshis: +paymentInDB?.amount,
+          outputIndex: 0,
+          scriptPubKey: scriptPubKey,
+        },
+      ]);
+
+      const walletForPay = paymentInDB.store.wallets.find(
+        (el) => el.currency === CurrencyType.Bitcoin,
+      );
+
+      // transaction.to(walletForPay.value, +paymentInDB?.amount * 10000000);
+
+      transaction.to(walletForPay.value, +paymentInDB?.amount);
+
+      const transactionSize = transaction._estimateSize();
+
       const address = {
+        economyFee: feesRecommended.economyFee * transactionSize,
+        avarageFee: feesRecommended.hourFee * transactionSize,
+        fastestFee: feesRecommended.fastestFee * transactionSize,
         publicKey: newWallet.toAddress().toString(),
         privateKey: newWallet.toString(),
       };
 
-      // if (newWallet?.status !== 'success') {
-      //   return;
-      // }
-
-      // const newWalletData = newWallet.data.address;
-
       const newTransaction = this.repo.create({
         payment: paymentInDB,
         walletForTransaction: address,
+        sender: dto.email ? dto.email : '',
         amount: paymentInDB.amount,
         status: 'processing',
         updated: new Date(),
