@@ -244,8 +244,10 @@ export class TransactionController implements CrudController<Transaction> {
         where: {
           id: transaction.payment.store.id,
         },
-        relations: ['user'],
+        relations: ['user', 'wallets'],
       });
+
+      const receiver = store.wallets.find((el) => el.currency === transaction.payment.currency);
 
       if (store.user.token !== user.token) {
         res.status(HttpStatus.CONFLICT).send('No access to this transaction');
@@ -254,7 +256,7 @@ export class TransactionController implements CrudController<Transaction> {
       }
 
       // delete transaction.payment;
-      return transaction;
+      return { ...transaction, receiver: receiver };
     } catch (err) {
       throw new HttpException(
         'This store does not have such a transaction',
